@@ -11,3 +11,12 @@ TARGET_SIZE = "2048"
 # O código do álbum NÃO fica aqui. Configure com:
 #   npx wrangler secret put ALBUM_TOKEN
 # Para testes locais, crie worker/.dev.vars com:  ALBUM_TOKEN=SEU_CODIGO
+
+# Lista do álbum guardada aqui; atualizada pelo agendamento abaixo
+[[kv_namespaces]]
+binding = "ALBUM_KV"
+id = "4c1c1fda5cc24387943d5d0790c21a92"
+
+# Relê o álbum a cada 10 min em segundo plano (o iCloud leva ~50 s num álbum grande)
+[triggers]
+crons = ["*/10 * * * *"]

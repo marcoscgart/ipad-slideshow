@@ -17,6 +17,11 @@
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
 export default {
+  // agendamento (wrangler.toml → [triggers]): mantém a lista do KV atualizada
+  async scheduled(event, env, ctx) {
+    if (env.ALBUM_TOKEN) ctx.waitUntil(refreshList(env));
+  },
+
   async fetch(request, env, ctx) {
     const cors = corsHeaders(request, env);
 
@@ -43,25 +48,34 @@ export default {
 
 /* ---------------- rotas ---------------- */
 
+/**
+ * A lista vem do KV (atualizado pelo agendamento a cada 10 min), então a
+ * resposta é imediata. Só lê o iCloud na hora se o KV estiver vazio ou com ?fresh=1.
+ */
 async function handleList(url, env, ctx, cors) {
-  const ttl = parseInt(env.CACHE_SECONDS || '600', 10);
-  const cache = caches.default;
-  const cacheKey = new Request(url.origin + '/__album_list_v2');
-
-  if (url.searchParams.get('fresh') !== '1') {
-    const hit = await cache.match(cacheKey);
-    if (hit) return withHeaders(hit, Object.assign({ 'X-Cache': 'HIT' }, cors));
+  let body = null;
+  let source = 'KV';
+  if (env.ALBUM_KV && url.searchParams.get('fresh') !== '1') {
+    body = await env.ALBUM_KV.get('list');
   }
-
-  const data = await loadList(env.ALBUM_TOKEN, parseInt(env.TARGET_SIZE || '2048', 10));
-  const res = new Response(JSON.stringify(data), {
-    headers: {
+  if (!body) {
+    body = await refreshList(env);
+    source = 'ICLOUD';
+  }
+  return new Response(body, {
+    headers: Object.assign({
       'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'public, max-age=' + ttl,
-    },
+      'Cache-Control': 'public, max-age=60',
+      'X-Source': source,
+    }, cors),
   });
-  ctx.waitUntil(cache.put(cacheKey, res.clone()));
-  return withHeaders(res, Object.assign({ 'X-Cache': 'MISS' }, cors));
+}
+
+async function refreshList(env) {
+  const data = await loadList(env.ALBUM_TOKEN, parseInt(env.TARGET_SIZE || '2048', 10));
+  const body = JSON.stringify(data);
+  if (env.ALBUM_KV && data.count > 0) await env.ALBUM_KV.put('list', body);
+  return body;
 }
 
 async function handlePhoto(url, env, ctx, cors) {

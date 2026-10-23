@@ -72,6 +72,25 @@
 
   function setStatus(t) { statusEl.textContent = t || ''; }
 
+  /* diagnóstico na tela: abra a página com ?debug=1 */
+  var DEBUG = /[?&]debug=1/.test(window.location.search);
+  var logEl = null;
+  var t0 = Date.now();
+  function log(msg) {
+    if (!DEBUG) return;
+    if (!logEl) {
+      logEl = document.createElement('pre');
+      logEl.style.cssText = 'position:fixed;left:0;top:0;right:0;max-height:45%;overflow:hidden;margin:0;' +
+        'padding:8px;background:rgba(0,0,0,.75);color:#7f7;font:12px Menlo,monospace;z-index:99;' +
+        'white-space:pre-wrap;pointer-events:none';
+      document.body.appendChild(logEl);
+    }
+    var line = ((Date.now() - t0) / 1000).toFixed(1) + 's  ' + msg;
+    logEl.textContent = (line + '\n' + logEl.textContent).slice(0, 4000);
+  }
+  window.onerror = function (m, src, line) { log('ERRO JS: ' + m + ' (' + line + ')'); };
+  log('início · ' + navigator.userAgent);
+
   /* ---------- estado ---------- */
   var photos = [];          // lista atual {id,url,w,h,date}
   var queue = [];           // ids a exibir
@@ -398,11 +417,14 @@
     if (!job) { schedule(5000); return; }
     busy = true;
     job.promise.then(function () {
+      log('foto ok ' + job.img.naturalWidth + 'x' + job.img.naturalHeight);
       pending = null;
       return show(job.photo, job.img);
     }, function () {
       // URL expirada ou falha de rede: descarta, atualiza lista e tenta outra
       pending = null;
+      log('foto falhou: ' + job.photo.id);
+      if (!currentSlide) setStatus('Não consegui carregar a foto. Tentando outra…');
       releaseImg(job.img);
       refreshList();
       busy = false;
@@ -474,14 +496,20 @@
       return r.json();
     }).then(function (data) {
       var list = (data && data.photos) || [];
+      log('lista recebida: ' + list.length + ' fotos');
+      if (list.length && !currentSlide) setStatus('Carregando a primeira foto…');
       if (list.length) {
         applyList(list);
         lsSet('slideshow.lastList', JSON.stringify(list));
       } else if (!photos.length) {
         setStatus('O álbum está vazio.');
       }
-    }).catch(function () {
-      if (!photos.length) setStatus('Sem conexão. Tentando novamente…');
+    }).catch(function (e) {
+      log('lista falhou: ' + (e && e.message || e));
+      if (!photos.length) {
+        setStatus('Sem conexão. Tentando novamente…');
+        setTimeout(refreshList, 15000);
+      }
     }).then(function () { refreshing = false; });
   }
 

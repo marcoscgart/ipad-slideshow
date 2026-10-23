@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Slideshow</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Slideshow">
+<meta name="theme-color" content="#000000">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage"></div>
+<div id="dim"></div>
+<div id="status"></div>
+<div id="hint">Toque na tela para manter o iPad acordado</div>
+<button id="gear" type="button" aria-label="Configurações">&#9881;</button>
+
+<div id="panel" hidden>
+  <form id="settings">
+    <h2>Configurações</h2>
+    <label>Tempo por foto (s) <input name="interval" type="number" min="3" max="3600" step="1"></label>
+    <label>Duração da transição (s) <input name="duration" type="number" min="0.3" max="5" step="0.1"></label>
+    <label>Ordem
+      <select name="order"><option value="random">Aleatória</option><option value="sequential">Sequencial</option><option value="newest">Mais novas primeiro</option></select>
+    </label>
+    <label><input name="blurBg" type="checkbox"> Fundo desfocado quando a foto não preenche a tela</label>
+    <fieldset id="effects"><legend>Efeitos</legend></fieldset>
+    <fieldset><legend>Modo quiosque</legend>
+      <label>Escurecer das <input name="dimStart" type="time"> às <input name="dimEnd" type="time"></label>
+      <label>Intensidade (0–1) <input name="dimLevel" type="number" min="0" max="1" step="0.05"></label>
+      <label>Recarregar a página a cada (h, 0 = nunca) <input name="reloadHours" type="number" min="0" max="48" step="0.5"></label>
+    </fieldset>
+    <div class="row">
+      <button type="button" id="btnAll">Todos</button>
+      <button type="button" id="btnNone">Nenhum</button>
+      <button type="button" id="btnReload">Recarregar agora</button>
+    </div>
+    <div class="row">
+      <button type="button" id="btnCancel">Cancelar</button>
+      <button type="submit" class="primary">Salvar</button>
+    </div>
+  </form>
+</div>
+
+<video id="nosleep" src="media/nosleep.mp4" muted playsinline webkit-playsinline loop preload="auto"></video>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+name = "icloud-slideshow"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+# Origem da página no GitHub Pages (sem barra no fim). Use "*" para testes.
+ALLOWED_ORIGIN = "*"
+CACHE_SECONDS = "600"
+TARGET_SIZE = "2048"
+
+# O código do álbum NÃO fica aqui. Configure com:
+#   npx wrangler secret put ALBUM_TOKEN
+# Para testes locais, crie worker/.dev.vars com:  ALBUM_TOKEN=SEU_CODIGO

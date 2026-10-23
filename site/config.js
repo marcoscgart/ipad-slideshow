@@ -3,5 +3,5 @@ self.SLIDESHOW_CONFIG = {
   // URL do seu Worker (troque depois do "wrangler deploy")
   workerUrl: 'https://icloud-slideshow.marcoscgart.workers.dev/',
   // Versão do cache offline: aumente ao publicar mudanças na página
-  cacheVersion: 'v7'
+  cacheVersion: 'v8'
 };

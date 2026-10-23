@@ -589,31 +589,34 @@
     if (panelEl.hidden) e.preventDefault();
   }, { passive: false });
 
-  var effBox = document.getElementById('effects');
-  Object.keys(EFFECTS).forEach(function (k) {
-    var l = document.createElement('label');
-    var c = document.createElement('input');
-    c.type = 'checkbox'; c.name = 'fx'; c.value = k;
-    l.appendChild(c);
-    l.appendChild(document.createTextNode(' ' + EFFECTS[k]));
-    effBox.appendChild(l);
-  });
+  /* opções simplificadas da tela de configurações */
+  var SPEEDS = { slow: 1.8, normal: 1.0, fast: 0.6 };
+  var FX_SETS = {
+    all: Object.keys(EFFECTS),
+    soft: ['fade', 'kenburns', 'zoom-in', 'zoom-out', 'curtain', 'iris'],
+    fade: ['fade']
+  };
+
+  function speedName(d) {
+    var best = 'normal', diff = 99;
+    for (var k in SPEEDS) {
+      if (Math.abs(SPEEDS[k] - d) < diff) { diff = Math.abs(SPEEDS[k] - d); best = k; }
+    }
+    return best;
+  }
+  function fxSetName(list) {
+    var key = list.slice().sort().join(',');
+    for (var k in FX_SETS) if (FX_SETS[k].slice().sort().join(',') === key) return k;
+    return 'all';
+  }
 
   function fillForm() {
     form.interval.value = S.interval;
-    form.duration.value = S.duration;
     form.order.value = S.order;
-    form.blurBg.checked = !!S.blurBg;
+    form.speed.value = speedName(S.duration);
+    form.fxSet.value = fxSetName(S.effects);
     form.dimStart.value = S.dimStart;
     form.dimEnd.value = S.dimEnd;
-    form.dimLevel.value = S.dimLevel;
-    form.reloadHours.value = S.reloadHours;
-    var boxes = form.querySelectorAll('input[name=fx]');
-    for (var i = 0; i < boxes.length; i++) boxes[i].checked = S.effects.indexOf(boxes[i].value) !== -1;
-  }
-  function setAll(v) {
-    var boxes = form.querySelectorAll('input[name=fx]');
-    for (var i = 0; i < boxes.length; i++) boxes[i].checked = v;
   }
 
   gearEl.addEventListener('click', function (e) {
@@ -622,9 +625,6 @@
     panelEl.hidden = false;
     paused = true;
   });
-  document.getElementById('btnAll').addEventListener('click', function () { setAll(true); });
-  document.getElementById('btnNone').addEventListener('click', function () { setAll(false); });
-  document.getElementById('btnReload').addEventListener('click', function () { window.location.reload(); });
   document.getElementById('btnCancel').addEventListener('click', closePanel);
 
   function closePanel() {
@@ -636,20 +636,13 @@
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    var fx = [];
-    var boxes = form.querySelectorAll('input[name=fx]');
-    for (var i = 0; i < boxes.length; i++) if (boxes[i].checked) fx.push(boxes[i].value);
     var orderChanged = S.order !== form.order.value;
     S.interval = Math.max(3, parseFloat(form.interval.value) || DEFAULTS.interval);
-    S.duration = Math.min(5, Math.max(0.3, parseFloat(form.duration.value) || DEFAULTS.duration));
     S.order = form.order.value;
-    S.blurBg = form.blurBg.checked;
-    S.effects = fx.length ? fx : ['fade'];
+    S.duration = SPEEDS[form.speed.value] || DEFAULTS.duration;
+    S.effects = (FX_SETS[form.fxSet.value] || FX_SETS.all).slice();
     S.dimStart = form.dimStart.value || DEFAULTS.dimStart;
     S.dimEnd = form.dimEnd.value || DEFAULTS.dimEnd;
-    S.dimLevel = parseFloat(form.dimLevel.value);
-    if (isNaN(S.dimLevel)) S.dimLevel = DEFAULTS.dimLevel;
-    S.reloadHours = parseFloat(form.reloadHours.value) || 0;
     lsSet('slideshow.settings', JSON.stringify(S));
     if (orderChanged) {
       if (pending) { releaseImg(pending.img); pending = null; }

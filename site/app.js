@@ -487,14 +487,29 @@
     if (pending && !findPhoto(pending.photo.id)) { releaseImg(pending.img); pending = null; }
   }
 
+  /** GET de JSON via XHR (o Safari 9 / iOS 9 não tem fetch). */
+  function getJSON(url, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      var sep = url.indexOf('?') === -1 ? '?' : '&';
+      xhr.open('GET', url + sep + '_=' + Date.now(), true); // evita cache do Safari
+      xhr.timeout = timeoutMs || 90000;
+      xhr.onload = function () {
+        if (xhr.status < 200 || xhr.status >= 300) { reject(new Error('HTTP ' + xhr.status)); return; }
+        try { resolve(JSON.parse(xhr.responseText)); } catch (e) { reject(new Error('JSON inválido')); }
+      };
+      xhr.onerror = function () { reject(new Error('rede/CORS/certificado (status ' + xhr.status + ')')); };
+      xhr.ontimeout = function () { reject(new Error('tempo esgotado')); };
+      xhr.send();
+    });
+  }
+
   var refreshing = false;
   function refreshList() {
     if (refreshing || !CFG.workerUrl) return Promise.resolve();
     refreshing = true;
-    return fetch(CFG.workerUrl, { cache: 'no-store' }).then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function (data) {
+    log('pedindo lista…');
+    return getJSON(CFG.workerUrl).then(function (data) {
       var list = (data && data.photos) || [];
       log('lista recebida: ' + list.length + ' fotos');
       if (list.length && !currentSlide) setStatus('Carregando a primeira foto…');

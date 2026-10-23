@@ -4,7 +4,7 @@ compatibility_date = "2024-09-23"
 
 [vars]
 # Origem da página no GitHub Pages (sem barra no fim). Use "*" para testes.
-ALLOWED_ORIGIN = "*"
+ALLOWED_ORIGIN = "https://marcoscgart.github.io"
 CACHE_SECONDS = "600"
 TARGET_SIZE = "2048"
 

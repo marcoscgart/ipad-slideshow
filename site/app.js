@@ -147,6 +147,12 @@
   var EASE_OUT = 'cubic-bezier(.1,.5,.5,1)';
 
   /* ---------- imagens ---------- */
+  /** Fotos do Worker vêm com CORS ("anonymous") para poderem ser copiadas para a reserva offline. */
+  function setSrc(img, url) {
+    if (url.indexOf('data:') !== 0) img.crossOrigin = 'anonymous';
+    img.src = url;
+  }
+
   function loadImage(photo) {
     var img = new Image();
     var p = new Promise(function (resolve, reject) {
@@ -154,8 +160,96 @@
       img.onload = function () { clearTimeout(t); resolve(img); };
       img.onerror = function () { clearTimeout(t); reject(new Error('erro ao carregar')); };
     });
-    img.src = photo.url;
+    setSrc(img, photo.url);
     return { photo: photo, img: img, promise: p };
+  }
+
+  /* ---------- reserva offline (IndexedDB) ----------
+   * Guarda as últimas OFF_MAX fotos exibidas, reduzidas para 1024 px, para o
+   * slideshow continuar se a internet cair. A lista de ids fica no localStorage. */
+  var OFF_MAX = 40;
+  var offIds = [];
+  try { offIds = JSON.parse(lsGet('slideshow.offlineIds') || '[]'); } catch (e) { offIds = []; }
+  var offDb = null;
+  var offDbFailed = false;
+
+  function offSaveIds() { lsSet('slideshow.offlineIds', JSON.stringify(offIds)); }
+
+  function offOpen() {
+    return new Promise(function (resolve, reject) {
+      if (offDb) { resolve(offDb); return; }
+      if (offDbFailed || !window.indexedDB) { reject(new Error('sem IndexedDB')); return; }
+      var req;
+      try { req = window.indexedDB.open('slideshow-offline', 1); } catch (e) { offDbFailed = true; reject(e); return; }
+      req.onupgradeneeded = function () { req.result.createObjectStore('photos', { keyPath: 'id' }); };
+      req.onsuccess = function () { offDb = req.result; resolve(offDb); };
+      req.onerror = function () { offDbFailed = true; reject(req.error || new Error('IndexedDB')); };
+    });
+  }
+
+  /** Executa fn(store, setResult) numa transação; resolve quando ela termina. */
+  function offTx(mode, fn) {
+    return offOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction('photos', mode);
+        var result;
+        tx.oncomplete = function () { resolve(result); };
+        tx.onerror = tx.onabort = function () { reject(tx.error || new Error('transação')); };
+        fn(tx.objectStore('photos'), function (r) { result = r; });
+      });
+    });
+  }
+
+  function offlineSave(photo, img) {
+    if (offDbFailed || offIds.indexOf(photo.id) !== -1) return;
+    var data;
+    try {
+      var iw = img.naturalWidth, ih = img.naturalHeight;
+      var s = Math.min(1, 1024 / Math.max(iw, ih));
+      var c = document.createElement('canvas');
+      c.width = Math.round(iw * s);
+      c.height = Math.round(ih * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      data = c.toDataURL('image/jpeg', 0.75);
+      c.width = c.height = 0;
+    } catch (e) {
+      log('reserva: não deu para copiar a foto (' + (e && e.message) + ')');
+      return;
+    }
+    var drop = [];
+    while (offIds.length >= OFF_MAX) drop.push(offIds.shift());
+    offTx('readwrite', function (store) {
+      for (var i = 0; i < drop.length; i++) store['delete'](drop[i]);
+      store.put({ id: photo.id, data: data });
+    }).then(function () {
+      offIds.push(photo.id);
+      offSaveIds();
+      log('reserva: ' + offIds.length + ' fotos');
+    }, function (e) {
+      // provavelmente sem espaço: devolve a lista e reduz o limite
+      offIds = drop.concat(offIds);
+      OFF_MAX = Math.max(5, offIds.length);
+      log('reserva: erro ao salvar (' + (e && e.name) + '), limite agora ' + OFF_MAX);
+    });
+  }
+
+  /** Carrega uma foto aleatória da reserva (diferente da atual). */
+  function offlineLoad(excludeId) {
+    var ids = offIds.filter(function (id) { return id !== excludeId; });
+    if (!ids.length) return Promise.reject(new Error('reserva vazia'));
+    var id = pick(ids);
+    return offTx('readonly', function (store, done) {
+      var r = store.get(id);
+      r.onsuccess = function () { done(r.result); };
+    }).then(function (rec) {
+      if (!rec || !rec.data) {
+        offIds.splice(offIds.indexOf(id), 1);
+        offSaveIds();
+        throw new Error('foto não está mais na reserva');
+      }
+      var job = loadImage({ id: id, url: rec.data, offline: true });
+      return job.promise.then(function () { return job; });
+    });
   }
 
   function releaseImg(img) {
@@ -209,7 +303,7 @@
     d.className = 'slide';
     if (S.blurBg && loaded) d.appendChild(makeBlur(loaded));
     var img = document.createElement('img');
-    img.src = url;
+    setSrc(img, url);
     img.alt = '';
     d.appendChild(img);
     return d;
@@ -243,7 +337,7 @@
           t.appendChild(bc);
         }
         var img = document.createElement('img');
-        img.src = url;
+        setSrc(img, url);
         css(img, { left: (-c * tw) + 'px', top: (-r * th) + 'px', width: W + 'px', height: H + 'px' });
         t.appendChild(img);
         layer.appendChild(t);
@@ -409,9 +503,33 @@
     timer = setTimeout(advance, ms);
   }
 
+  /** Mostra uma foto da reserva offline; resolve 'skip' se não houver. */
+  function showOffline() {
+    return offlineLoad(currentId).then(function (j) {
+      log('sem internet: mostrando foto da reserva');
+      return show(j.photo, j.img);
+    }, function (e) {
+      log('reserva indisponível: ' + (e && e.message));
+      busy = false;
+      schedule(photos.length ? 2000 : 5000);
+      return 'skip';
+    });
+  }
+
   function advance() {
     if (paused || busy) { schedule(1000); return; }
-    if (!photos.length) { schedule(5000); return; }
+    if (!photos.length) {
+      // sem lista (ex.: primeira abertura sem internet): tenta a reserva
+      if (!offIds.length) { schedule(5000); return; }
+      busy = true;
+      showOffline().then(function (r) {
+        if (r === 'skip') return;
+        busy = false;
+        setStatus('');
+        schedule(S.interval * 1000);
+      });
+      return;
+    }
     preloadNext();
     var job = pending;
     if (!job) { schedule(5000); return; }
@@ -421,12 +539,13 @@
       pending = null;
       return show(job.photo, job.img);
     }, function () {
-      // URL expirada ou falha de rede: descarta, atualiza lista e tenta outra
+      // falha de rede ou foto removida: atualiza a lista e usa a reserva
       pending = null;
       log('foto falhou: ' + job.photo.id);
-      if (!currentSlide) setStatus('Não consegui carregar a foto. Tentando outra…');
       releaseImg(job.img);
       refreshList();
+      if (offIds.length) return showOffline();
+      if (!currentSlide) setStatus('Não consegui carregar a foto. Tentando outra…');
       busy = false;
       schedule(2000);
       return 'skip';
@@ -445,6 +564,7 @@
   function show(photo, loaderImg) {
     var old = currentSlide;
     var n = makeSlide(photo.url, loaderImg);
+    if (!photo.offline) offlineSave(photo, loaderImg);
     stage.appendChild(n);
     releaseImg(loaderImg); // a <img> do slide já usa a versão em cache
     var effect = old ? chooseEffect() : 'fade';
@@ -472,7 +592,7 @@
     var base = workerBase();
     list = list.filter(function (p) { return p && p.id && p.c; });
     list.forEach(function (p) {
-      p.url = base + 'photo?id=' + encodeURIComponent(p.id) + '&c=' + encodeURIComponent(p.c);
+      p.url = base + 'photo?id=' + encodeURIComponent(p.id) + '&c=' + encodeURIComponent(p.c) + '&raw=1';
     });
     if (!list.length) return;
     var oldIds = {};
@@ -522,7 +642,7 @@
     }).catch(function (e) {
       log('lista falhou: ' + (e && e.message || e));
       if (!photos.length) {
-        setStatus('Sem conexão. Tentando novamente…');
+        if (!currentSlide) setStatus('Sem conexão. Tentando novamente…');
         setTimeout(refreshList, 15000);
       }
     }).then(function () { refreshing = false; });
@@ -657,6 +777,16 @@
   function start() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(function () { /* sem SW */ });
+    }
+    // iOS 9 não tem service worker: a página fica offline pelo AppCache (offline.appcache).
+    // Quando uma versão nova é baixada, recarrega para usá-la.
+    var ac = window.applicationCache;
+    if (ac && ac.addEventListener) {
+      ac.addEventListener('updateready', function () {
+        log('versão nova da página baixada, recarregando');
+        try { ac.swapCache(); } catch (e) { /* ignora */ }
+        window.location.reload();
+      });
     }
     if (!CFG.workerUrl || CFG.workerUrl.indexOf('SEU-SUBDOMINIO') !== -1) {
       setStatus('Configure workerUrl em config.js');

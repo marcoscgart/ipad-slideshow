@@ -1,0 +1,17 @@
+CACHE MANIFEST
+# Abre a página sem internet no iOS 9 (que não tem service worker).
+# Mude a versão abaixo a cada publicação, junto com cacheVersion em config.js.
+# v9
+
+./
+index.html
+style.css
+config.js
+app.js
+manifest.webmanifest
+icons/icon-180.png
+icons/icon-192.png
+media/nosleep.mp4
+
+NETWORK:
+*

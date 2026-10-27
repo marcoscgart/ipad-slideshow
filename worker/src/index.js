@@ -86,6 +86,27 @@ async function handlePhoto(url, env, ctx, cors) {
   }
 
   const cache = caches.default;
+
+  // raw=1: entrega os bytes da imagem com CORS, para a página poder guardar
+  // uma cópia no iPad (reserva offline). O conteúdo de um checksum nunca muda.
+  if (url.searchParams.get('raw') === '1') {
+    const rawKey = new Request(url.origin + '/__photo_raw_v1/' + checksum);
+    const rawHit = await cache.match(rawKey);
+    if (rawHit) return withHeaders(rawHit, cors);
+    const target = await assetUrl(env, id, checksum);
+    if (!target) return json({ error: 'foto não encontrada' }, 404, cors);
+    const img = await fetch(target);
+    if (!img.ok) return json({ error: 'iCloud HTTP ' + img.status }, 502, cors);
+    const res = new Response(img.body, {
+      headers: {
+        'Content-Type': img.headers.get('Content-Type') || 'image/jpeg',
+        'Cache-Control': 'public, max-age=604800',
+      },
+    });
+    ctx.waitUntil(cache.put(rawKey, res.clone()));
+    return withHeaders(res, cors);
+  }
+
   const cacheKey = new Request(url.origin + '/__photo_v2/' + checksum);
   const hit = await cache.match(cacheKey);
   if (hit) return withHeaders(hit, cors);
@@ -109,6 +130,13 @@ async function handlePhoto(url, env, ctx, cors) {
   });
   ctx.waitUntil(cache.put(cacheKey, res.clone()));
   return withHeaders(res, cors);
+}
+
+/** URL atual (temporária) de uma foto no iCloud, ou null. */
+async function assetUrl(env, id, checksum) {
+  const r = await icloud(env.ALBUM_TOKEN, 'webasseturls', { photoGuids: [id] });
+  const it = (r.items || {})[checksum];
+  return it ? 'https://' + it.url_location + it.url_path : null;
 }
 
 /* ---------------- iCloud ---------------- */

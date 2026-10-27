@@ -89,8 +89,13 @@ Ficam salvas no próprio iPad. Também dá para passar na URL, por exemplo:
   Persianas e mosaico reaproveitam a mesma imagem já decodificada.
 - A cada 10 min a lista é atualizada sem interromper a exibição; fotos novas entram na frente da fila.
 - Se uma foto falhar (removida do álbum, rede), a página pede uma lista nova e pula para a próxima.
-- Offline: o service worker serve a página e a última lista conhecida. As fotos em si só aparecem
-  se ainda estiverem no cache do Safari (o álbum não é baixado inteiro, para poupar memória e espaço).
+- Offline: a página guarda no iPad (IndexedDB) as últimas 40 fotos exibidas, reduzidas para 1024 px
+  (~4 MB). Se a internet cair, o slideshow continua com elas e volta ao álbum quando a conexão voltar.
+  A página abre sem internet pelo AppCache (`site/offline.appcache`, iOS 9) ou pelo service worker
+  (navegadores novos). Ao publicar mudanças, altere `cacheVersion` em `config.js` **e** a linha `# vN`
+  do `offline.appcache`.
+- As fotos passam pelo Worker (`/photo?...&raw=1`, com CORS e cache de 7 dias na Cloudflare);
+  é isso que permite à página copiá-las para a reserva.
 
 ## Limitações
 

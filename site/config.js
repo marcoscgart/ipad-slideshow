@@ -4,5 +4,5 @@ self.SLIDESHOW_CONFIG = {
   workerUrl: 'https://icloud-slideshow.marcoscgart.workers.dev/',
   // Versão do cache offline: aumente ao publicar mudanças na página
   // (e mude também a linha "# vN" em offline.appcache)
-  cacheVersion: 'v9'
+  cacheVersion: 'v10'
 };

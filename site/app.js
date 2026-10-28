@@ -25,7 +25,7 @@
     effects: Object.keys(EFFECTS),
     dimStart: '23:30',
     dimEnd: '06:30',
-    dimLevel: 0.85,
+    dimLevel: 0.4,
     reloadHours: 4,
     refreshMinutes: 10
   };
@@ -40,7 +40,8 @@
     for (k in DEFAULTS) s[k] = DEFAULTS[k];
     try {
       var saved = JSON.parse(lsGet('slideshow.settings') || '{}');
-      for (k in saved) if (k in DEFAULTS) s[k] = saved[k];
+      // dimLevel é fixo (fora da tela de configurações): ignora valor antigo salvo
+      for (k in saved) if (k in DEFAULTS && k !== 'dimLevel') s[k] = saved[k];
     } catch (e) { /* ignora */ }
     // parâmetros na URL têm prioridade (ex.: ?interval=20&effects=fade,iris)
     var q = window.location.search.replace(/^\?/, '').split('&');
